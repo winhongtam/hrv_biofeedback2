@@ -97,7 +97,7 @@
             <strong>⚠️ 連接小撇步：</strong>
             <ul class="list-disc ml-4 mt-1 space-y-1 text-slate-300">
                 <li>請保持手錶螢幕亮起。</li>
-                <li>若連接失敗，程式會自動重試 3 次。</li>
+                <li>若出現 undefined 錯誤，請<strong>重新整理網頁</strong>後再試。</li>
                 <li>若一直失敗，請關閉 iPhone 藍牙再重新開啟。</li>
             </ul>
         </div>
@@ -159,7 +159,7 @@
             <div class="text-xs text-slate-500 mb-1">系統日誌</div>
             <div id="consoleLog" class="h-full max-h-32 bg-black/30 rounded-lg p-2 font-mono text-xs text-green-400 overflow-y-auto border border-slate-800">
                 > 等待連接...<br>
-                > 若失敗請嘗試重新開關手機藍牙。
+                > 請確保手錶在廣播心率模式。
             </div>
         </div>
     </main>
@@ -329,19 +329,19 @@
                 statusBadge.className = 'status-badge status-scanning';
                 statusBadge.innerText = '搜尋中';
 
-                let options = {};
-                // 使用標準心率 UUID
-                const HEART_RATE_SERVICE_UUID = 0x180D;
-                const HEART_RATE_MEASUREMENT_CHARACTERISTIC = 0x2A37;
+                // 使用字串 ID 相容性較佳
+                const SERVICE_ID = 'heart_rate';
+                const CHARACTERISTIC_ID = 'heart_rate_measurement';
 
+                let options = {};
                 if (mode === 'A') {
                     options = {
-                        filters: [{ services: [HEART_RATE_SERVICE_UUID] }]
+                        filters: [{ services: [SERVICE_ID] }]
                     };
                 } else {
                     options = {
                         acceptAllDevices: true,
-                        optionalServices: [HEART_RATE_SERVICE_UUID]
+                        optionalServices: [SERVICE_ID]
                     };
                 }
 
@@ -352,7 +352,6 @@
 
                 log('連接中 (若失敗將自動重試)...');
                 
-                // --- 重試機制 (Retry Logic) ---
                 let server = null;
                 const maxRetries = 3;
                 
@@ -360,7 +359,7 @@
                     try {
                         server = await bluetoothDevice.gatt.connect();
                         log('GATT 連接成功！');
-                        break; // 成功，跳出迴圈
+                        break; 
                     } catch (err) {
                         console.warn(`Attempt ${i + 1} failed:`, err);
                         if (i < maxRetries - 1) {
@@ -376,26 +375,32 @@
                     throw new Error("無法建立 GATT 伺服器連線");
                 }
 
-                // --- 關鍵修正：加入穩定性等待 ---
                 log('等待裝置穩定 (2秒)...');
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
-                log('取得服務...');
-                // 使用明確的 UUID 而不是別名
-                const service = await server.getPrimaryService(HEART_RATE_SERVICE_UUID);
+                // 修正：在取得特定服務前，先取得所有服務來觸發發現
+                log('正在喚醒服務列表...');
+                try {
+                    await server.getPrimaryServices(); 
+                } catch(e) {
+                    console.warn("Service discovery warning:", e);
+                    // 忽略錯誤，繼續嘗試
+                }
+
+                log('取得心率服務...');
+                const service = await server.getPrimaryService(SERVICE_ID);
 
                 log('取得特徵值...');
-                const characteristic = await service.getCharacteristic(HEART_RATE_MEASUREMENT_CHARACTERISTIC);
+                const characteristic = await service.getCharacteristic(CHARACTERISTIC_ID);
 
                 log('啟動監聽...');
                 await characteristic.startNotifications();
                 characteristic.addEventListener('characteristicvaluechanged', handleHeartRateMeasurement);
-                heartRateCharacteristic = characteristic; // 保存起來供後續使用
+                heartRateCharacteristic = characteristic; 
 
                 statusBadge.className = 'status-badge status-connected';
                 statusBadge.innerText = '已連接';
                 
-                // Disable buttons
                 connectBtn.disabled = true;
                 connectBtnAll.disabled = true;
                 connectBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -404,7 +409,7 @@
                 stopSimulation();
 
             } catch (error) {
-                console.error(error);
+                console.error("BT Error:", error);
                 statusBadge.className = 'status-badge status-disconnected';
                 statusBadge.innerText = '失敗';
                 
@@ -414,15 +419,13 @@
                     log('⚠️ 環境限制: 預覽視窗不支援藍牙。');
                     alert("⚠️ 預覽環境限制\n\n請將檔案上傳至 GitHub Pages 進行測試。");
                 } else {
-                    // 修正 undefined 錯誤訊息
-                    const errorMsg = error.message || error.toString();
-                    log('錯誤: ' + errorMsg);
+                    // 詳細錯誤解析
+                    const errorName = error.name || 'UnknownError';
+                    const errorMessage = error.message || 'No message provided';
+                    log(`錯誤: ${errorName} - ${errorMessage}`);
                     
-                    if (errorMsg.includes("Service not found")) {
-                        log('❌ 找不到心率服務。');
-                        log('可能原因：');
-                        log('1. 手錶未在廣播模式');
-                        log('2. 請嘗試「忘記此裝置」後重連');
+                    if (errorMessage.includes("undefined")) {
+                        log('💡 建議：請「重新整理」網頁，並確認手錶螢幕亮起。');
                     }
                 }
             }
