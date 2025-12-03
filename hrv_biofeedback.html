@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garmin HRV Biofeedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .breathing-circle {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99,102,241,0.8) 0%, rgba(99,102,241,0.2) 70%);
+            box-shadow: 0 0 30px rgba(99,102,241,0.4);
+            transition: transform 0.1s linear, background 1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            position: relative;
+        }
+        
+        .breathing-text {
+            position: absolute;
+            font-size: 1rem;
+            bottom: -40px;
+            opacity: 0.8;
+        }
+
+        /* Chart Canvas Container */
+        .chart-container {
+            position: relative;
+            height: 150px;
+            width: 100%;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .stat-card {
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .status-disconnected { background-color: #ef4444; color: white; }
+        .status-connected { background-color: #22c55e; color: white; }
+        .status-scanning { background-color: #eab308; color: black; }
+
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center shadow-md z-10">
+        <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+            HRV Biofeedback
+        </h1>
+        <div id="connectionStatus" class="status-badge status-disconnected">未連接</div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col items-center justify-start p-4 space-y-6 overflow-y-auto">
+        
+        <!-- Controls -->
+        <div class="w-full max-w-md grid grid-cols-2 gap-4">
+            <button id="connectBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+                連接手錶
+            </button>
+            <button id="simulateBtn" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg border border-slate-600">
+                模擬數據
+            </button>
+        </div>
+
+        <div class="text-xs text-slate-400 text-center px-4">
+            請確保您的 Garmin 手錶已開啟「廣播心率 (Broadcast Heart Rate)」模式。
+        </div>
+
+        <!-- Biofeedback Visualizer -->
+        <div class="py-8 relative flex flex-col items-center justify-center">
+            <div id="visualizer" class="breathing-circle">
+                <span id="hrDisplay">--</span>
+                <div id="breathGuideText" class="breathing-text">準備開始</div>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="w-full max-w-md grid grid-cols-3 gap-4">
+            <div class="stat-card">
+                <div class="text-slate-400 text-xs uppercase tracking-wider">心率 (BPM)</div>
+                <div id="bpmValue" class="text-2xl font-bold text-white mt-1">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-slate-400 text-xs uppercase tracking-wider">HRV (rMSSD)</div>
+                <div id="hrvValue" class="text-2xl font-bold text-emerald-400 mt-1">--</div>
+                <div class="text-[10px] text-slate-500">毫秒</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-slate-400 text-xs uppercase tracking-wider">壓力指數</div>
+                <div id="stressValue" class="text-2xl font-bold text-blue-400 mt-1">--</div>
+            </div>
+        </div>
+
+        <!-- Realtime Graph -->
+        <div class="w-full max-w-md bg-slate-800 rounded-xl p-3 shadow-inner border border-slate-700">
+            <div class="text-xs text-slate-400 mb-2 flex justify-between">
+                <span>RR Interval (ms)</span>
+                <span class="text-emerald-500">Live Data</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="rrChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="w-full max-w-md">
+            <div class="text-xs text-slate-500 mb-1">系統日誌</div>
+            <div id="consoleLog" class="h-24 bg-black/30 rounded-lg p-2 font-mono text-xs text-green-400 overflow-y-auto border border-slate-800">
+                > 等待連接...
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- 設定與變數 ---
+        const CHART_LENGTH = 50;
+        let rrIntervals = []; // 儲存 RR 間期
+        let chartData = new Array(CHART_LENGTH).fill(800);
+        let bluetoothDevice;
+        let heartRateCharacteristic;
+        let isSimulating = false;
+        let simulationInterval;
+        
+        // Biofeedback 參數
+        const BREATH_CYCLE_SEC = 10; // 10秒一個呼吸循環 (6次/分)
+        const INHALE_RATIO = 0.4; // 吸氣佔 40% (4秒吸, 6秒吐)
+        
+        // --- DOM 元素 ---
+        const connectBtn = document.getElementById('connectBtn');
+        const simulateBtn = document.getElementById('simulateBtn');
+        const statusBadge = document.getElementById('connectionStatus');
+        const logDiv = document.getElementById('consoleLog');
+        const visualizer = document.getElementById('visualizer');
+        const bpmDisplay = document.getElementById('bpmValue');
+        const hrvDisplay = document.getElementById('hrvValue');
+        const hrCenterDisplay = document.getElementById('hrDisplay');
+        const stressDisplay = document.getElementById('stressValue');
+        const breathText = document.getElementById('breathGuideText');
+        
+        // --- Canvas Chart ---
+        const canvas = document.getElementById('rrChart');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawChart() {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            
+            // Grid lines
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h/2);
+            ctx.lineTo(w, h/2);
+            ctx.stroke();
+
+            // Data Line
+            if (chartData.length < 2) return;
+
+            const maxRR = Math.max(...chartData, 1200);
+            const minRR = Math.min(...chartData, 500);
+            const range = maxRR - minRR || 1;
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#10b981'; // Emerald 500
+            ctx.lineWidth = 2;
+
+            chartData.forEach((val, i) => {
+                const x = (i / (CHART_LENGTH - 1)) * w;
+                // Normalize Y (invert because canvas Y goes down)
+                const normalizedY = 1 - (val - minRR) / range; 
+                // Add some padding
+                const y = (normalizedY * (h - 20)) + 10; 
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        // --- 核心邏輯：更新數據與 UI ---
+        
+        function updateStats(hr, rr) {
+            // 更新心率顯示
+            bpmDisplay.innerText = hr;
+            hrCenterDisplay.innerText = hr;
+
+            // 處理 RR 間期 (RR 必須大於 0)
+            if (rr && rr > 0) {
+                // 過濾異常值 (雜訊)
+                if (rr < 300 || rr > 2000) return;
+
+                // 更新圖表數據
+                chartData.push(rr);
+                if (chartData.length > CHART_LENGTH) chartData.shift();
+                drawChart();
+
+                // 儲存用於 HRV 計算
+                rrIntervals.push(rr);
+                if (rrIntervals.length > 20) rrIntervals.shift(); // 保持最近20個點來計算即時 rMSSD
+
+                calculateHRV();
+            }
+        }
+
+        function calculateHRV() {
+            if (rrIntervals.length < 5) return;
+
+            // 計算 rMSSD
+            // rMSSD = sqrt(mean(diffs^2))
+            let sumSquaredDiffs = 0;
+            for (let i = 1; i < rrIntervals.length; i++) {
+                const diff = rrIntervals[i] - rrIntervals[i - 1];
+                sumSquaredDiffs += diff * diff;
+            }
+            const meanSquaredDiff = sumSquaredDiffs / (rrIntervals.length - 1);
+            const rmssd = Math.sqrt(meanSquaredDiff);
+            const rmssdRounded = Math.round(rmssd);
+
+            hrvDisplay.innerText = rmssdRounded;
+
+            // 更新 Biofeedback 顏色/狀態
+            updateBiofeedbackColor(rmssdRounded);
+        }
+
+        function updateBiofeedbackColor(rmssd) {
+            // 簡單的壓力評估 (一般人 rMSSD 低於 20 表示壓力大，高於 40-50 表示放鬆)
+            // 這只是粗略估計，個體差異很大
+            let color, stressText;
+            
+            if (rmssd < 25) {
+                color = 'rgba(239, 68, 68, 0.8)'; // Red (High Stress)
+                stressText = "高";
+                stressDisplay.className = "text-2xl font-bold text-red-500 mt-1";
+            } else if (rmssd < 50) {
+                color = 'rgba(234, 179, 8, 0.8)'; // Yellow (Moderate)
+                stressText = "中";
+                stressDisplay.className = "text-2xl font-bold text-yellow-500 mt-1";
+            } else {
+                color = 'rgba(34, 197, 94, 0.8)'; // Green (Relaxed)
+                stressText = "低";
+                stressDisplay.className = "text-2xl font-bold text-green-500 mt-1";
+            }
+
+            // 更新背景色，保持呼吸動畫
+            visualizer.style.background = `radial-gradient(circle, ${color} 0%, ${color.replace('0.8', '0.2')} 70%)`;
+            visualizer.style.boxShadow = `0 0 30px ${color.replace('0.8', '0.4')}`;
+            stressDisplay.innerText = stressText;
+        }
+
+        // --- 呼吸引導動畫 ---
+        function startBreathingGuide() {
+            const startTime = Date.now();
+            
+            function animate() {
+                const now = Date.now();
+                const elapsed = (now - startTime) / 1000;
+                const cycleTime = elapsed % BREATH_CYCLE_SEC;
+                
+                if (cycleTime < BREATH_CYCLE_SEC * INHALE_RATIO) {
+                    // 吸氣階段
+                    visualizer.style.transform = 'scale(1.3)';
+                    breathText.innerText = "吸氣...";
+                } else {
+                    // 吐氣階段
+                    visualizer.style.transform = 'scale(0.85)';
+                    breathText.innerText = "吐氣...";
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+        
+        // 頁面載入後立即啟動呼吸動畫
+        startBreathingGuide();
+
+
+        // --- Bluetooth 處理 ---
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function onConnectButtonClick() {
+            try {
+                log('開始搜尋藍牙裝置...');
+                statusBadge.className = 'status-badge status-scanning';
+                statusBadge.innerText = '搜尋中...';
+
+                // 請求藍牙裝置，過濾 Heart Rate Service (UUID 0x180D)
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['heart_rate'] }]
+                });
+
+                log(`已選取裝置: ${bluetoothDevice.name}`);
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                log('連接 GATT Server...');
+                const server = await bluetoothDevice.gatt.connect();
+
+                log('取得心率服務...');
+                const service = await server.getPrimaryService('heart_rate');
+
+                log('取得特徵值 (Measurement)...');
+                heartRateCharacteristic = await service.getCharacteristic('heart_rate_measurement');
+
+                log('啟動通知...');
+                await heartRateCharacteristic.startNotifications();
+                heartRateCharacteristic.addEventListener('characteristicvaluechanged', handleHeartRateMeasurement);
+
+                statusBadge.className = 'status-badge status-connected';
+                statusBadge.innerText = '已連接';
+                connectBtn.disabled = true;
+                connectBtn.innerText = "已連接";
+                connectBtn.classList.add('bg-gray-600', 'cursor-not-allowed');
+                
+                // 停止模擬
+                stopSimulation();
+
+            } catch (error) {
+                log('連接失敗: ' + error);
+                statusBadge.className = 'status-badge status-disconnected';
+                statusBadge.innerText = '失敗';
+            }
+        }
+
+        function handleHeartRateMeasurement(event) {
+            const value = event.target.value;
+            parseHeartRate(value);
+        }
+
+        function parseHeartRate(value) {
+            // DataView
+            // Byte 0: Flags
+            // Byte 1: Heart Rate Measurement Value (Uint8 or Uint16)
+            
+            const flags = value.getUint8(0);
+            
+            // Check Flag Bit 0 (Heart Rate Format)
+            // 0 = Uint8, 1 = Uint16
+            const rate16Bits = flags & 0x1;
+            
+            let heartRate;
+            let offset = 1;
+            
+            if (rate16Bits) {
+                heartRate = value.getUint16(offset, /*littleEndian=*/true);
+                offset += 2;
+            } else {
+                heartRate = value.getUint8(offset);
+                offset += 1;
+            }
+
+            // Check Flag Bit 4 (RR-Interval Present)
+            // 1 = Present
+            const rrPresent = flags & 0x10;
+            
+            let rrInterval = null;
+            if (rrPresent) {
+                // RR-Intervals are usually uint16 in 1/1024 seconds resolution
+                // Note: There might be multiple RR intervals in one packet
+                // We will just take the last one for simplicity in this demo
+                // Ideally, you should buffer all of them.
+                
+                // Skip Energy Expended if present (Bit 3)
+                const energyPresent = flags & 0x8;
+                if (energyPresent) {
+                    offset += 2;
+                }
+
+                // Parse RR intervals
+                while (offset + 1 < value.byteLength) {
+                    const rawRR = value.getUint16(offset, /*littleEndian=*/true);
+                    // Convert 1/1024s to milliseconds
+                    rrInterval = Math.round((rawRR / 1024) * 1000);
+                    offset += 2;
+                }
+            }
+
+            updateStats(heartRate, rrInterval);
+        }
+
+        function onDisconnected(event) {
+            log('裝置已斷開');
+            statusBadge.className = 'status-badge status-disconnected';
+            statusBadge.innerText = '已斷開';
+            connectBtn.disabled = false;
+            connectBtn.innerText = "連接手錶";
+            connectBtn.classList.remove('bg-gray-600', 'cursor-not-allowed');
+        }
+
+        // --- 模擬模式 ---
+        
+        function startSimulation() {
+            if (isSimulating) return;
+            isSimulating = true;
+            log('啟動模擬模式');
+            
+            let simHR = 70;
+            let simRR = 850; 
+
+            simulationInterval = setInterval(() => {
+                // 模擬自然的 HRV 波動 (Respiratory Sinus Arrhythmia)
+                // 隨著呼吸週期改變 RR
+                const now = Date.now() / 1000;
+                const breathPhase = Math.sin(now * (Math.PI * 2 / BREATH_CYCLE_SEC)); // -1 to 1
+                
+                // 當 breathPhase > 0 (吸氣) -> 心跳變快 -> RR 變短
+                // 當 breathPhase < 0 (吐氣) -> 心跳變慢 -> RR 變長
+                
+                simRR = 850 + (breathPhase * 100); // 750ms to 950ms
+                // 添加一點隨機雜訊
+                simRR += (Math.random() - 0.5) * 50;
+                
+                simHR = Math.round(60000 / simRR);
+
+                updateStats(simHR, Math.round(simRR));
+
+            }, 1000); // 每秒更新一次
+        }
+
+        function stopSimulation() {
+            isSimulating = false;
+            clearInterval(simulationInterval);
+        }
+
+        // Event Listeners
+        connectBtn.addEventListener('click', onConnectButtonClick);
+        simulateBtn.addEventListener('click', () => {
+            if (isSimulating) {
+                stopSimulation();
+                simulateBtn.innerText = "模擬數據";
+                simulateBtn.classList.remove('bg-green-600');
+                log('停止模擬');
+            } else {
+                startSimulation();
+                simulateBtn.innerText = "停止模擬";
+                simulateBtn.classList.add('bg-green-600');
+            }
+        });
+
+    </script>
+</body>
+</html>
