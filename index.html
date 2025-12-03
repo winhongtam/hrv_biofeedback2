@@ -7,10 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #0f172a;
             color: #e2e8f0;
             overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
         .breathing-circle {
             width: 200px;
@@ -66,12 +67,22 @@
         .status-connected { background-color: #22c55e; color: white; }
         .status-scanning { background-color: #eab308; color: black; }
 
+        .instruction-box {
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.85rem;
+            color: #fde047;
+            text-align: left;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen">
 
     <!-- Header -->
-    <header class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center shadow-md z-10">
+    <header class="p-4 bg-slate-900 border-b border-slate-700 flex justify-between items-center shadow-md z-10 shrink-0">
         <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
             HRV Biofeedback
         </h1>
@@ -79,26 +90,37 @@
     </header>
 
     <!-- Main Content -->
-    <main class="flex-grow flex flex-col items-center justify-start p-4 space-y-6 overflow-y-auto">
+    <main class="flex-grow flex flex-col items-center justify-start p-4 space-y-4 overflow-y-auto">
         
-        <!-- Controls -->
-        <div class="w-full max-w-md grid grid-cols-2 gap-4">
-            <button id="connectBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
-                連接手錶
-            </button>
-            <button id="simulateBtn" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg border border-slate-600">
-                模擬數據
-            </button>
+        <!-- Instruction for iOS -->
+        <div class="w-full max-w-md instruction-box">
+            <strong>⚠️ 搜尋不到裝置？請做這一步：</strong>
+            <ol class="list-decimal ml-4 mt-1 space-y-1 text-slate-300">
+                <li>拿起手錶，長按 Menu 鍵。</li>
+                <li>設定 > 手機 > 狀態 > <strong>關閉</strong> (重要!)。</li>
+                <li>回到「廣播心率」畫面。</li>
+            </ol>
         </div>
 
-        <div class="text-xs text-slate-400 text-center px-4">
-            <p>1. 請確保 Garmin 手錶位於「廣播心率」畫面。</p>
-            <p class="text-yellow-500 mt-1">2. 若搜尋不到，請至 iOS 設定 > 藍牙 > 忽略此裝置 (解開系統佔用)。</p>
+        <!-- Controls -->
+        <div class="w-full max-w-md flex flex-col gap-3">
+            <div class="grid grid-cols-2 gap-3">
+                <button id="connectBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-2 rounded-xl transition shadow-lg flex items-center justify-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+                    模式A: 搜尋心率
+                </button>
+                <button id="connectBtnAll" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-2 rounded-xl transition shadow-lg flex items-center justify-center gap-1 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    模式B: 搜尋全部
+                </button>
+            </div>
+            <button id="simulateBtn" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-xl transition shadow-lg border border-slate-600 text-sm">
+                測試介面 (模擬數據)
+            </button>
         </div>
 
         <!-- Biofeedback Visualizer -->
-        <div class="py-8 relative flex flex-col items-center justify-center">
+        <div class="py-4 relative flex flex-col items-center justify-center shrink-0">
             <div id="visualizer" class="breathing-circle">
                 <span id="hrDisplay">--</span>
                 <div id="breathGuideText" class="breathing-text">準備開始</div>
@@ -106,24 +128,23 @@
         </div>
 
         <!-- Stats Grid -->
-        <div class="w-full max-w-md grid grid-cols-3 gap-4">
+        <div class="w-full max-w-md grid grid-cols-3 gap-3">
             <div class="stat-card">
-                <div class="text-slate-400 text-xs uppercase tracking-wider">心率 (BPM)</div>
-                <div id="bpmValue" class="text-2xl font-bold text-white mt-1">--</div>
+                <div class="text-slate-400 text-[10px] uppercase tracking-wider">心率 (BPM)</div>
+                <div id="bpmValue" class="text-xl font-bold text-white mt-1">--</div>
             </div>
             <div class="stat-card">
-                <div class="text-slate-400 text-xs uppercase tracking-wider">HRV (rMSSD)</div>
-                <div id="hrvValue" class="text-2xl font-bold text-emerald-400 mt-1">--</div>
-                <div class="text-[10px] text-slate-500">毫秒</div>
+                <div class="text-slate-400 text-[10px] uppercase tracking-wider">HRV (rMSSD)</div>
+                <div id="hrvValue" class="text-xl font-bold text-emerald-400 mt-1">--</div>
             </div>
             <div class="stat-card">
-                <div class="text-slate-400 text-xs uppercase tracking-wider">壓力指數</div>
-                <div id="stressValue" class="text-2xl font-bold text-blue-400 mt-1">--</div>
+                <div class="text-slate-400 text-[10px] uppercase tracking-wider">壓力指數</div>
+                <div id="stressValue" class="text-xl font-bold text-blue-400 mt-1">--</div>
             </div>
         </div>
 
         <!-- Realtime Graph -->
-        <div class="w-full max-w-md bg-slate-800 rounded-xl p-3 shadow-inner border border-slate-700">
+        <div class="w-full max-w-md bg-slate-800 rounded-xl p-3 shadow-inner border border-slate-700 shrink-0">
             <div class="text-xs text-slate-400 mb-2 flex justify-between">
                 <span>RR Interval (ms)</span>
                 <span class="text-emerald-500">Live Data</span>
@@ -134,10 +155,11 @@
         </div>
 
         <!-- Logs -->
-        <div class="w-full max-w-md">
+        <div class="w-full max-w-md flex-grow min-h-[100px]">
             <div class="text-xs text-slate-500 mb-1">系統日誌</div>
-            <div id="consoleLog" class="h-24 bg-black/30 rounded-lg p-2 font-mono text-xs text-green-400 overflow-y-auto border border-slate-800">
-                > 等待連接...
+            <div id="consoleLog" class="h-full max-h-32 bg-black/30 rounded-lg p-2 font-mono text-xs text-green-400 overflow-y-auto border border-slate-800">
+                > 等待連接...<br>
+                > 請先解除手機藍牙配對。
             </div>
         </div>
     </main>
@@ -158,6 +180,7 @@
         
         // --- DOM 元素 ---
         const connectBtn = document.getElementById('connectBtn');
+        const connectBtnAll = document.getElementById('connectBtnAll');
         const simulateBtn = document.getElementById('simulateBtn');
         const statusBadge = document.getElementById('connectionStatus');
         const logDiv = document.getElementById('consoleLog');
@@ -173,8 +196,10 @@
         const ctx = canvas.getContext('2d');
         
         function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+            if(canvas.parentElement) {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+            }
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -205,9 +230,7 @@
 
             chartData.forEach((val, i) => {
                 const x = (i / (CHART_LENGTH - 1)) * w;
-                // Normalize Y (invert because canvas Y goes down)
                 const normalizedY = 1 - (val - minRR) / range; 
-                // Add some padding
                 const y = (normalizedY * (h - 20)) + 10; 
                 
                 if (i === 0) ctx.moveTo(x, y);
@@ -219,23 +242,18 @@
         // --- 核心邏輯：更新數據與 UI ---
         
         function updateStats(hr, rr) {
-            // 更新心率顯示
             bpmDisplay.innerText = hr;
             hrCenterDisplay.innerText = hr;
 
-            // 處理 RR 間期 (RR 必須大於 0)
             if (rr && rr > 0) {
-                // 過濾異常值 (雜訊)
-                if (rr < 300 || rr > 2000) return;
+                if (rr < 300 || rr > 2000) return; // Filter noise
 
-                // 更新圖表數據
                 chartData.push(rr);
                 if (chartData.length > CHART_LENGTH) chartData.shift();
                 drawChart();
 
-                // 儲存用於 HRV 計算
                 rrIntervals.push(rr);
-                if (rrIntervals.length > 20) rrIntervals.shift(); // 保持最近20個點來計算即時 rMSSD
+                if (rrIntervals.length > 20) rrIntervals.shift();
 
                 calculateHRV();
             }
@@ -243,9 +261,6 @@
 
         function calculateHRV() {
             if (rrIntervals.length < 5) return;
-
-            // 計算 rMSSD
-            // rMSSD = sqrt(mean(diffs^2))
             let sumSquaredDiffs = 0;
             for (let i = 1; i < rrIntervals.length; i++) {
                 const diff = rrIntervals[i] - rrIntervals[i - 1];
@@ -256,125 +271,118 @@
             const rmssdRounded = Math.round(rmssd);
 
             hrvDisplay.innerText = rmssdRounded;
-
-            // 更新 Biofeedback 顏色/狀態
             updateBiofeedbackColor(rmssdRounded);
         }
 
         function updateBiofeedbackColor(rmssd) {
-            // 簡單的壓力評估 (一般人 rMSSD 低於 20 表示壓力大，高於 40-50 表示放鬆)
-            // 這只是粗略估計，個體差異很大
             let color, stressText;
-            
             if (rmssd < 25) {
-                color = 'rgba(239, 68, 68, 0.8)'; // Red (High Stress)
-                stressText = "高";
-                stressDisplay.className = "text-2xl font-bold text-red-500 mt-1";
+                color = 'rgba(239, 68, 68, 0.8)';
+                stressText = "壓力高";
+                stressDisplay.className = "text-xl font-bold text-red-500 mt-1";
             } else if (rmssd < 50) {
-                color = 'rgba(234, 179, 8, 0.8)'; // Yellow (Moderate)
-                stressText = "中";
-                stressDisplay.className = "text-2xl font-bold text-yellow-500 mt-1";
+                color = 'rgba(234, 179, 8, 0.8)';
+                stressText = "壓力中";
+                stressDisplay.className = "text-xl font-bold text-yellow-500 mt-1";
             } else {
-                color = 'rgba(34, 197, 94, 0.8)'; // Green (Relaxed)
-                stressText = "低";
-                stressDisplay.className = "text-2xl font-bold text-green-500 mt-1";
+                color = 'rgba(34, 197, 94, 0.8)';
+                stressText = "放鬆";
+                stressDisplay.className = "text-xl font-bold text-green-500 mt-1";
             }
 
-            // 更新背景色，保持呼吸動畫
             visualizer.style.background = `radial-gradient(circle, ${color} 0%, ${color.replace('0.8', '0.2')} 70%)`;
             visualizer.style.boxShadow = `0 0 30px ${color.replace('0.8', '0.4')}`;
             stressDisplay.innerText = stressText;
         }
 
-        // --- 呼吸引導動畫 ---
         function startBreathingGuide() {
             const startTime = Date.now();
-            
             function animate() {
                 const now = Date.now();
                 const elapsed = (now - startTime) / 1000;
                 const cycleTime = elapsed % BREATH_CYCLE_SEC;
                 
                 if (cycleTime < BREATH_CYCLE_SEC * INHALE_RATIO) {
-                    // 吸氣階段
                     visualizer.style.transform = 'scale(1.3)';
                     breathText.innerText = "吸氣...";
                 } else {
-                    // 吐氣階段
                     visualizer.style.transform = 'scale(0.85)';
                     breathText.innerText = "吐氣...";
                 }
-                
                 requestAnimationFrame(animate);
             }
             animate();
         }
-        
-        // 頁面載入後立即啟動呼吸動畫
         startBreathingGuide();
-
 
         // --- Bluetooth 處理 ---
 
         function log(msg) {
-            const time = new Date().toLocaleTimeString();
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: "numeric", minute: "numeric", second: "numeric"});
             logDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        async function onConnectButtonClick() {
+        async function connectDevice(mode) {
             try {
-                log('開始搜尋藍牙裝置...');
+                log(`嘗試連接 (模式${mode})...`);
                 statusBadge.className = 'status-badge status-scanning';
-                statusBadge.innerText = '搜尋中...';
+                statusBadge.innerText = '搜尋中';
 
-                // 修改：使用 acceptAllDevices: true 以顯示所有裝置
-                // 這樣可以避免過濾條件不匹配導致搜不到的問題
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['heart_rate']
-                });
-
-                log(`已選取裝置: ${bluetoothDevice.name}`);
-                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
-                log('連接 GATT Server...');
-                const server = await bluetoothDevice.gatt.connect();
-
-                log('取得心率服務...');
-                let service;
-                try {
-                    service = await server.getPrimaryService('heart_rate');
-                } catch (err) {
-                     log('錯誤: 找不到心率服務。請確認您選擇了正確的 Garmin 裝置。');
-                     throw err;
+                let options = {};
+                if (mode === 'A') {
+                    // 模式 A: 精準過濾 (通常較穩)
+                    options = {
+                        filters: [{ services: ['heart_rate'] }]
+                    };
+                } else {
+                    // 模式 B: 顯示全部 (救急用)
+                    options = {
+                        acceptAllDevices: true,
+                        optionalServices: ['heart_rate']
+                    };
                 }
 
-                log('取得特徵值 (Measurement)...');
+                bluetoothDevice = await navigator.bluetooth.requestDevice(options);
+
+                log(`已選取: ${bluetoothDevice.name}`);
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                log('連接中...');
+                const server = await bluetoothDevice.gatt.connect();
+
+                log('取得服務...');
+                const service = await server.getPrimaryService('heart_rate');
+
+                log('取得特徵值...');
                 heartRateCharacteristic = await service.getCharacteristic('heart_rate_measurement');
 
-                log('啟動通知...');
+                log('啟動監聽...');
                 await heartRateCharacteristic.startNotifications();
                 heartRateCharacteristic.addEventListener('characteristicvaluechanged', handleHeartRateMeasurement);
 
                 statusBadge.className = 'status-badge status-connected';
                 statusBadge.innerText = '已連接';
-                connectBtn.disabled = true;
-                connectBtn.innerText = "已連接";
-                connectBtn.classList.add('bg-gray-600', 'cursor-not-allowed');
                 
-                // 停止模擬
+                // Disable buttons
+                connectBtn.disabled = true;
+                connectBtnAll.disabled = true;
+                connectBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                connectBtnAll.classList.add('opacity-50', 'cursor-not-allowed');
+                
                 stopSimulation();
 
             } catch (error) {
-                log('連接失敗: ' + error);
+                console.error(error);
+                log('錯誤: ' + error.message);
                 statusBadge.className = 'status-badge status-disconnected';
                 statusBadge.innerText = '失敗';
                 
-                // 重置按鈕
-                connectBtn.disabled = false;
-                connectBtn.innerText = "連接手錶";
-                connectBtn.classList.remove('bg-gray-600', 'cursor-not-allowed');
+                if (error.name === 'NotFoundError') {
+                    log('提示: 您取消了選取或未找到裝置');
+                } else if (error.name === 'SecurityError') {
+                    log('提示: 需要 HTTPS 或權限');
+                }
             }
         }
 
@@ -384,53 +392,31 @@
         }
 
         function parseHeartRate(value) {
-            // DataView
-            // Byte 0: Flags
-            // Byte 1: Heart Rate Measurement Value (Uint8 or Uint16)
-            
             const flags = value.getUint8(0);
-            
-            // Check Flag Bit 0 (Heart Rate Format)
-            // 0 = Uint8, 1 = Uint16
             const rate16Bits = flags & 0x1;
-            
             let heartRate;
             let offset = 1;
             
             if (rate16Bits) {
-                heartRate = value.getUint16(offset, /*littleEndian=*/true);
+                heartRate = value.getUint16(offset, true);
                 offset += 2;
             } else {
                 heartRate = value.getUint8(offset);
                 offset += 1;
             }
 
-            // Check Flag Bit 4 (RR-Interval Present)
-            // 1 = Present
             const rrPresent = flags & 0x10;
-            
             let rrInterval = null;
             if (rrPresent) {
-                // RR-Intervals are usually uint16 in 1/1024 seconds resolution
-                // Note: There might be multiple RR intervals in one packet
-                // We will just take the last one for simplicity in this demo
-                // Ideally, you should buffer all of them.
-                
-                // Skip Energy Expended if present (Bit 3)
                 const energyPresent = flags & 0x8;
-                if (energyPresent) {
-                    offset += 2;
-                }
+                if (energyPresent) offset += 2;
 
-                // Parse RR intervals
                 while (offset + 1 < value.byteLength) {
-                    const rawRR = value.getUint16(offset, /*littleEndian=*/true);
-                    // Convert 1/1024s to milliseconds
+                    const rawRR = value.getUint16(offset, true);
                     rrInterval = Math.round((rawRR / 1024) * 1000);
                     offset += 2;
                 }
             }
-
             updateStats(heartRate, rrInterval);
         }
 
@@ -439,53 +425,41 @@
             statusBadge.className = 'status-badge status-disconnected';
             statusBadge.innerText = '已斷開';
             connectBtn.disabled = false;
-            connectBtn.innerText = "連接手錶";
-            connectBtn.classList.remove('bg-gray-600', 'cursor-not-allowed');
+            connectBtnAll.disabled = false;
+            connectBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            connectBtnAll.classList.remove('opacity-50', 'cursor-not-allowed');
         }
 
         // --- 模擬模式 ---
-        
         function startSimulation() {
             if (isSimulating) return;
             isSimulating = true;
-            log('啟動模擬模式');
-            
+            log('啟動模擬');
             let simHR = 70;
             let simRR = 850; 
-
             simulationInterval = setInterval(() => {
-                // 模擬自然的 HRV 波動 (Respiratory Sinus Arrhythmia)
-                // 隨著呼吸週期改變 RR
                 const now = Date.now() / 1000;
-                const breathPhase = Math.sin(now * (Math.PI * 2 / BREATH_CYCLE_SEC)); // -1 to 1
-                
-                // 當 breathPhase > 0 (吸氣) -> 心跳變快 -> RR 變短
-                // 當 breathPhase < 0 (吐氣) -> 心跳變慢 -> RR 變長
-                
-                simRR = 850 + (breathPhase * 100); // 750ms to 950ms
-                // 添加一點隨機雜訊
-                simRR += (Math.random() - 0.5) * 50;
-                
+                const breathPhase = Math.sin(now * (Math.PI * 2 / BREATH_CYCLE_SEC));
+                simRR = 850 + (breathPhase * 100) + (Math.random() - 0.5) * 50;
                 simHR = Math.round(60000 / simRR);
-
                 updateStats(simHR, Math.round(simRR));
-
-            }, 1000); // 每秒更新一次
+            }, 1000);
         }
 
         function stopSimulation() {
             isSimulating = false;
             clearInterval(simulationInterval);
+            simulateBtn.innerText = "測試介面 (模擬數據)";
+            simulateBtn.classList.remove('bg-green-600');
         }
 
         // Event Listeners
-        connectBtn.addEventListener('click', onConnectButtonClick);
+        connectBtn.addEventListener('click', () => connectDevice('A'));
+        connectBtnAll.addEventListener('click', () => connectDevice('B'));
+        
         simulateBtn.addEventListener('click', () => {
             if (isSimulating) {
                 stopSimulation();
-                simulateBtn.innerText = "模擬數據";
-                simulateBtn.classList.remove('bg-green-600');
-                log('停止模擬');
             } else {
                 startSimulation();
                 simulateBtn.innerText = "停止模擬";
