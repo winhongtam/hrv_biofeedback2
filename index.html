@@ -93,7 +93,8 @@
         </div>
 
         <div class="text-xs text-slate-400 text-center px-4">
-            請確保您的 Garmin 手錶已開啟「廣播心率 (Broadcast Heart Rate)」模式。
+            <p>1. 請確保 Garmin 手錶位於「廣播心率」畫面。</p>
+            <p class="text-yellow-500 mt-1">2. 若搜尋不到，請至 iOS 設定 > 藍牙 > 忽略此裝置 (解開系統佔用)。</p>
         </div>
 
         <!-- Biofeedback Visualizer -->
@@ -327,9 +328,11 @@
                 statusBadge.className = 'status-badge status-scanning';
                 statusBadge.innerText = '搜尋中...';
 
-                // 請求藍牙裝置，過濾 Heart Rate Service (UUID 0x180D)
+                // 修改：使用 acceptAllDevices: true 以顯示所有裝置
+                // 這樣可以避免過濾條件不匹配導致搜不到的問題
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['heart_rate'] }]
+                    acceptAllDevices: true,
+                    optionalServices: ['heart_rate']
                 });
 
                 log(`已選取裝置: ${bluetoothDevice.name}`);
@@ -339,7 +342,13 @@
                 const server = await bluetoothDevice.gatt.connect();
 
                 log('取得心率服務...');
-                const service = await server.getPrimaryService('heart_rate');
+                let service;
+                try {
+                    service = await server.getPrimaryService('heart_rate');
+                } catch (err) {
+                     log('錯誤: 找不到心率服務。請確認您選擇了正確的 Garmin 裝置。');
+                     throw err;
+                }
 
                 log('取得特徵值 (Measurement)...');
                 heartRateCharacteristic = await service.getCharacteristic('heart_rate_measurement');
@@ -361,6 +370,11 @@
                 log('連接失敗: ' + error);
                 statusBadge.className = 'status-badge status-disconnected';
                 statusBadge.innerText = '失敗';
+                
+                // 重置按鈕
+                connectBtn.disabled = false;
+                connectBtn.innerText = "連接手錶";
+                connectBtn.classList.remove('bg-gray-600', 'cursor-not-allowed');
             }
         }
 
